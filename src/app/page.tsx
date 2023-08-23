@@ -10,6 +10,8 @@ import {
 import firebase_app from "@/firebase/config";
 import CancelOutlined from "@mui/icons-material/CancelOutlined";
 import AddIcon from "@mui/icons-material/Add";
+import Checkbox from "@mui/material/Checkbox";
+
 import Modal from "@mui/material/Modal";
 import Box from "@mui/material/Box";
 import CloseIcon from "@mui/icons-material/Close";
@@ -20,6 +22,9 @@ import RadioGroup from "@mui/material/RadioGroup";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import FormControl from "@mui/material/FormControl";
 import FormLabel from "@mui/material/FormLabel";
+import { CircularProgress, IconButton, Tooltip } from "@mui/material";
+import updateData from "@/firebase/firestore/updateData";
+import deleteData from "@/firebase/firestore/deleteData";
 
 const style = {
   position: "absolute" as "absolute",
@@ -44,6 +49,8 @@ export default function Home() {
     description: "",
     status: "pending",
   });
+  const [loadingButton, setLoadingButton] = useState(false);
+  const [errorName, setErrorName] = useState("");
 
   const handleChange = (e: any) => {
     const key = e.target.name;
@@ -62,18 +69,20 @@ export default function Home() {
 
   const handleCloseAddModal = () => {
     setIsAddModalOpen(false);
+    handleResetForm();
   };
 
-  const handleForm = async () => {
-    const data = {
-      name: "John snow",
-      description: "Stark",
-    };
-    const { result, error } = await addData("task-list", "user-id", data);
+  const handleDeleteTask = async (taskId: string) => {
+    await deleteData("task-list", taskId);
+  };
 
-    if (error) {
-      return console.log(error);
-    }
+  const handleResetForm = () => {
+    setErrorName("");
+    setNewTaskForm({
+      name: "",
+      description: "",
+      status: "pending",
+    });
   };
 
   const db = getFirestore(firebase_app);
@@ -96,9 +105,10 @@ export default function Home() {
 
     try {
       let q = query(collection(db, col));
-      let itemsArr: any[] = [];
 
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        let itemsArr: any[] = [];
+
         querySnapshot.forEach((doc) => {
           itemsArr.push({ ...doc.data(), id: doc.id });
         });
@@ -111,109 +121,167 @@ export default function Home() {
     }
   }
 
+  const handleChangeStatus = async (task: Record<string, any>) => {
+    let tempTask = { ...task };
+    tempTask["status"] = "completed";
+    await updateData("task-list", task.id, tempTask);
+    console.log(tempTask, "tempTask>>");
+  };
+
+  const handleCreateTask = async () => {
+    if (newTaskForm.name) {
+      setLoadingButton(true);
+      const response = await addData("task-list", newTaskForm);
+      handleCloseAddModal();
+      console.log(response);
+    } else {
+      setErrorName("Please enter valid task name");
+    }
+  };
+
   // const handleClickAdd = () => {};
 
   return (
-    <div className="p-6">
-      <h1 className="text-center font-bold text-2xl">Task Manager</h1>
-      <div className="grid grid-cols-2 gap-4 p-10">
-        <div className="border-slate-300 border-2 p-6 w-64 rounded-md flex justify-center items-center flex-col">
-          <div className="cursor-pointer" onClick={handleOpenAddModal}>
-            <AddIcon style={{ fontSize: "50px" }} />{" "}
+    <div className="flex justify-center">
+      <div className="py-6 w-2/3">
+        <h1 className="text-center font-bold text-2xl">
+          Personal Task Manager
+        </h1>
+        <div className="grid gap-4 p-10 grid-cols-3 auto-rows-min grid-flow-row-dense">
+          <div className="border-slate-300 border-2 p-6 w-64 rounded-md flex justify-center items-center flex-col">
+            <div className="cursor-pointer" onClick={handleOpenAddModal}>
+              <AddIcon style={{ fontSize: "50px" }} />{" "}
+            </div>
+            {/* <div className="font-medium text-xl"> Add New Task</div> */}
           </div>
-          {/* <div className="font-medium text-xl"> Add New Task</div> */}
+          {taskList.map((task) => {
+            return (
+              <div
+                className="border-slate-300 border-2 p-6 w-64 rounded-md h-min"
+                key={task.id}
+              >
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <div>
+                      <Tooltip title="Mark as Completed">
+                        <Checkbox
+                          className="ml-0"
+                          checked={task.status === "completed"}
+                          onChange={() => handleChangeStatus(task)}
+                          disabled={task.status === "completed"}
+                          inputProps={{ "aria-label": "controlled" }}
+                          color="success"
+                        />
+                      </Tooltip>
+                    </div>
+                    <div className="text-xl font-semibold">{task?.name}</div>
+                  </div>
+                  <div
+                    className="cursor-pointer"
+                    onClick={() => handleDeleteTask(task.id)}
+                  >
+                    <Tooltip title="Delete Task">
+                      <IconButton>
+                        <CancelOutlined color="error" />{" "}
+                      </IconButton>
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="ml-10">{task?.description}</div>
+              </div>
+            );
+          })}
         </div>
-        {taskList.map((task) => {
-          return (
-            <div className="border-slate-300 border-2 p-6 w-64 rounded-md">
+        <Modal
+          open={isAddModalOpen}
+          onClose={handleCloseAddModal}
+          aria-labelledby="modal-modal-title"
+          aria-describedby="modal-modal-description"
+        >
+          <Box sx={style}>
+            <div className="">
               <div className="flex justify-between">
-                <div className="text-xl font-semibold">{task?.name}</div>
-                <div>
-                  <CancelOutlined />{" "}
+                <div className="font-semibold text-xl">Add New Task</div>
+                <div className="cursor-pointer" onClick={handleCloseAddModal}>
+                  <CloseIcon />
                 </div>
               </div>
-              <div>{task?.description}</div>
-            </div>
-          );
-        })}
-      </div>
-      <Modal
-        open={isAddModalOpen}
-        onClose={handleCloseAddModal}
-        aria-labelledby="modal-modal-title"
-        aria-describedby="modal-modal-description"
-      >
-        <Box sx={style}>
-          <div className="">
-            <div className="flex justify-between">
-              <div className="font-semibold text-xl">Add New Task</div>
-              <div className="cursor-pointer" onClick={handleCloseAddModal}>
-                <CloseIcon />
-              </div>
-            </div>
-            <div>
-              <div className="my-2">
-                <div className="mb-2">Title</div>
-                <div>
-                  <TextField
-                    size="small"
-                    name="name"
-                    className="w-full"
-                    value={newTaskForm.name}
-                    onChange={(e) => handleChange(e)}
-                  />{" "}
-                </div>
-              </div>
-              <div className="my-2">
-                <div className="mb-2">Description</div>
-                <div>
-                  <textarea
-                    name="description"
-                    className="border-slate-300 border w-full p-2"
-                    cols={5}
-                    rows={5}
-                    value={newTaskForm.description}
-                    onChange={(e) => handleChange(e)}
-                  />
-                </div>
-              </div>
-
-              <div className="my-2">
-                <div>Status</div>
-                <div>
-                  <FormControl>
-                    <RadioGroup
-                      aria-labelledby="demo-controlled-radio-buttons-group"
-                      name="status"
-                      row
-                      value={newTaskForm.status}
+              <div>
+                <div className="my-2">
+                  <div className="mb-2">Title</div>
+                  <div>
+                    <TextField
+                      size="small"
+                      name="name"
+                      className="w-full"
+                      value={newTaskForm.name}
                       onChange={(e) => handleChange(e)}
-                    >
-                      <FormControlLabel
-                        value="pending"
-                        control={<Radio />}
-                        label="Pending"
-                      />
-                      <FormControlLabel
-                        value="completed"
-                        control={<Radio />}
-                        label="Completed"
-                      />
-                    </RadioGroup>
-                  </FormControl>
+                    />{" "}
+                  </div>
+                  <div className="text-red-600 text-sm">
+                    {newTaskForm.name ? null : errorName}
+                  </div>
                 </div>
-              </div>
-              <div className="my-2">
-                <div>
-                  <Button variant="contained" fullWidth>
-                    Save Task
-                  </Button>
+                <div className="my-2">
+                  <div className="mb-2">Description</div>
+                  <div>
+                    <textarea
+                      name="description"
+                      className="border-slate-300 border w-full p-2"
+                      cols={5}
+                      rows={5}
+                      value={newTaskForm.description}
+                      onChange={(e) => handleChange(e)}
+                    />
+                  </div>
+                </div>
+
+                <div className="my-2">
+                  <div>Status</div>
+                  <div>
+                    <FormControl>
+                      <RadioGroup
+                        aria-labelledby="demo-controlled-radio-buttons-group"
+                        name="status"
+                        row
+                        value={newTaskForm.status}
+                        onChange={(e) => handleChange(e)}
+                      >
+                        <FormControlLabel
+                          value="pending"
+                          control={<Radio />}
+                          label="Pending"
+                        />
+                        <FormControlLabel
+                          value="completed"
+                          control={<Radio />}
+                          label="Completed"
+                        />
+                      </RadioGroup>
+                    </FormControl>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <div>
+                    <Button
+                      variant="contained"
+                      fullWidth
+                      onClick={handleCreateTask}
+                      disabled={loadingButton}
+                    >
+                      {loadingButton ? (
+                        <CircularProgress color="inherit" size={25} />
+                      ) : (
+                        "Save Task"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </Box>
-      </Modal>
+          </Box>
+        </Modal>
+      </div>
     </div>
   );
 }
