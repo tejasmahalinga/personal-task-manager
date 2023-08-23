@@ -83,6 +83,7 @@ export default function Home() {
       description: "",
       status: "pending",
     });
+    setLoadingButton(false);
   };
 
   const db = getFirestore(firebase_app);
